@@ -2,26 +2,68 @@ schema_version: 1
 
 context:
   version: "20.0.20"
+  # nodes.litellm.locked.rev from the upstream flake.lock of this tag
+  litellm_rev: 1a183efaa1a2108aed7e1bed8d445d93bd1aa60d
 
 package:
   name: ccusage
   version: ${{ version }}
 
 source:
-  url: https://github.com/ccusage/ccusage/archive/refs/tags/v${{ version }}.tar.gz
-  sha256: 24f81ac3dc5ca049b4170256402d67675fe7c2aa084274326726acf5cfcc8428
+  - url: https://github.com/ccusage/ccusage/archive/refs/tags/v${{ version }}.tar.gz
+    sha256: 24f81ac3dc5ca049b4170256402d67675fe7c2aa084274326726acf5cfcc8428
+  # The build embeds a LiteLLM pricing snapshot. Vendoring it as a source and
+  # pointing CCUSAGE_PRICING_JSON_PATH at it keeps the build offline and avoids
+  # the `fetch-litellm-pricing` feature, whose minreq/rustls/aws-lc-sys
+  # build-dependency does not cross-compile. The build script fails if a version
+  # bump leaves litellm_rev behind the rev upstream pins in flake.lock.
+  - url: https://raw.githubusercontent.com/BerriAI/litellm/${{ litellm_rev }}/model_prices_and_context_window.json
+    sha256: a74538d2edc13e1eb4f67870fbc2ee05035326e6eaed0dc5bce11d372cff6e60
+    file_name: model_prices_and_context_window.json
 
 build:
-  number: 0
+  number: 1
   script:
+    env:
+      CCUSAGE_PRICING_JSON_PATH: ${{ "$SRC_DIR/model_prices_and_context_window.json" if unix else "%SRC_DIR%\\model_prices_and_context_window.json" }}
     content:
+      # litellm_rev is pinned independently of ${{ version }}, so a version bump
+      # can leave it behind and silently embed stale prices. flake.lock is
+      # upstream's source of truth for the revision, so compare against it.
       - if: unix
         then:
-          - cargo auditable install --locked --no-track --bins --features fetch-litellm-pricing --root ${{ PREFIX }} --path rust/crates/ccusage
+          - |
+            upstream_rev=$(sed -n '/^    "litellm": {/,/^    }/p' "${SRC_DIR}/flake.lock" | sed -n 's/^ *"rev": "\([0-9a-f]\{40\}\)".*/\1/p')
+            if [ -z "${upstream_rev}" ]; then
+              echo "ERROR: no nodes.litellm.locked.rev in ${SRC_DIR}/flake.lock." >&2
+              echo "Upstream may no longer pin the LiteLLM pricing snapshot through its flake." >&2
+              echo "Check how this tag obtains the snapshot and update the recipe to match." >&2
+              exit 1
+            fi
+            if [ "${upstream_rev}" != "${{ litellm_rev }}" ]; then
+              echo "ERROR: the vendored LiteLLM pricing snapshot is stale." >&2
+              echo "  litellm_rev in recipe.yaml: ${{ litellm_rev }}" >&2
+              echo "  nodes.litellm.locked.rev:   ${upstream_rev}" >&2
+              echo "Set litellm_rev to ${upstream_rev} and refresh the pricing source sha256 with:" >&2
+              echo "  curl -sL https://raw.githubusercontent.com/BerriAI/litellm/${upstream_rev}/model_prices_and_context_window.json | sha256sum" >&2
+              exit 1
+            fi
         else:
-          - cargo auditable install --locked --no-track --bins --features fetch-litellm-pricing --root %LIBRARY_PREFIX% --path rust/crates/ccusage
+          # findstr cannot report the new revision, so point at flake.lock instead.
+          - 'findstr /c:${{ litellm_rev }} "%SRC_DIR%\flake.lock" >nul || (echo ERROR: litellm_rev is no longer the revision upstream pins in flake.lock, so the vendored LiteLLM pricing snapshot is stale. Set litellm_rev to nodes.litellm.locked.rev from flake.lock and refresh the pricing source sha256. & exit /b 1)'
+      # rustc hands the link over to the bundled rust-lld of the x86_64 build
+      # host, which does not understand ppc64le relocations. Use the cross
+      # toolchain's own linker instead.
+      - if: target_platform == "linux-ppc64le"
+        then:
+          - export CARGO_BUILD_RUSTFLAGS="${CARGO_BUILD_RUSTFLAGS:-} -C link-self-contained=no -C link-arg=-fuse-ld=bfd"
+      - if: unix
+        then:
+          - cargo auditable install --locked --no-track --bins --root ${{ PREFIX }} --path rust/crates/ccusage
+        else:
+          - cargo auditable install --locked --no-track --bins --root %LIBRARY_PREFIX% --path rust/crates/ccusage
       - cd rust
-      - cargo-bundle-licenses --format yaml --features fetch-litellm-pricing --output ../THIRDPARTY.yml
+      - cargo-bundle-licenses --format yaml --output ../THIRDPARTY.yml
 
 requirements:
   build:
