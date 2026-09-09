@@ -22,7 +22,7 @@ source:
     file_name: model_prices_and_context_window.json
 
 build:
-  number: 0
+  number: 1
   script:
     env:
       CCUSAGE_PRICING_JSON_PATH: ${{ "$SRC_DIR/model_prices_and_context_window.json" if unix else "%SRC_DIR%\\model_prices_and_context_window.json" }}
