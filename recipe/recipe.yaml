@@ -2,26 +2,37 @@ schema_version: 1
 
 context:
   version: "20.0.20"
+  # nodes.litellm.locked.rev from the upstream flake.lock of this tag
+  litellm_rev: 1a183efaa1a2108aed7e1bed8d445d93bd1aa60d
 
 package:
   name: ccusage
   version: ${{ version }}
 
 source:
-  url: https://github.com/ccusage/ccusage/archive/refs/tags/v${{ version }}.tar.gz
-  sha256: 24f81ac3dc5ca049b4170256402d67675fe7c2aa084274326726acf5cfcc8428
+  - url: https://github.com/ccusage/ccusage/archive/refs/tags/v${{ version }}.tar.gz
+    sha256: 24f81ac3dc5ca049b4170256402d67675fe7c2aa084274326726acf5cfcc8428
+  # The build embeds a LiteLLM pricing snapshot. Vendoring it as a source and
+  # pointing CCUSAGE_PRICING_JSON_PATH at it keeps the build offline and avoids
+  # the `fetch-litellm-pricing` feature, whose minreq/rustls/aws-lc-sys
+  # build-dependency does not cross-compile.
+  - url: https://raw.githubusercontent.com/BerriAI/litellm/${{ litellm_rev }}/model_prices_and_context_window.json
+    sha256: a74538d2edc13e1eb4f67870fbc2ee05035326e6eaed0dc5bce11d372cff6e60
+    file_name: model_prices_and_context_window.json
 
 build:
   number: 0
   script:
+    env:
+      CCUSAGE_PRICING_JSON_PATH: ${{ "$SRC_DIR/model_prices_and_context_window.json" if unix else "%SRC_DIR%\\model_prices_and_context_window.json" }}
     content:
       - if: unix
         then:
-          - cargo auditable install --locked --no-track --bins --features fetch-litellm-pricing --root ${{ PREFIX }} --path rust/crates/ccusage
+          - cargo auditable install --locked --no-track --bins --root ${{ PREFIX }} --path rust/crates/ccusage
         else:
-          - cargo auditable install --locked --no-track --bins --features fetch-litellm-pricing --root %LIBRARY_PREFIX% --path rust/crates/ccusage
+          - cargo auditable install --locked --no-track --bins --root %LIBRARY_PREFIX% --path rust/crates/ccusage
       - cd rust
-      - cargo-bundle-licenses --format yaml --features fetch-litellm-pricing --output ../THIRDPARTY.yml
+      - cargo-bundle-licenses --format yaml --output ../THIRDPARTY.yml
 
 requirements:
   build:
