@@ -15,8 +15,8 @@ source:
   # The build embeds a LiteLLM pricing snapshot. Vendoring it as a source and
   # pointing CCUSAGE_PRICING_JSON_PATH at it keeps the build offline and avoids
   # the `fetch-litellm-pricing` feature, whose minreq/rustls/aws-lc-sys
-  # build-dependency does not cross-compile. check_litellm_pin.py fails the
-  # build if a version bump leaves litellm_rev behind upstream's flake.lock.
+  # build-dependency does not cross-compile. The build script fails if a version
+  # bump leaves litellm_rev behind the rev upstream pins in flake.lock.
   - url: https://raw.githubusercontent.com/BerriAI/litellm/${{ litellm_rev }}/model_prices_and_context_window.json
     sha256: a74538d2edc13e1eb4f67870fbc2ee05035326e6eaed0dc5bce11d372cff6e60
     file_name: model_prices_and_context_window.json
@@ -27,6 +27,30 @@ build:
     env:
       CCUSAGE_PRICING_JSON_PATH: ${{ "$SRC_DIR/model_prices_and_context_window.json" if unix else "%SRC_DIR%\\model_prices_and_context_window.json" }}
     content:
+      # litellm_rev is pinned independently of ${{ version }}, so a version bump
+      # can leave it behind and silently embed stale prices. flake.lock is
+      # upstream's source of truth for the revision, so compare against it.
+      - if: unix
+        then:
+          - |
+            upstream_rev=$(sed -n '/^    "litellm": {/,/^    }/p' "${SRC_DIR}/flake.lock" | sed -n 's/^ *"rev": "\([0-9a-f]\{40\}\)".*/\1/p')
+            if [ -z "${upstream_rev}" ]; then
+              echo "ERROR: no nodes.litellm.locked.rev in ${SRC_DIR}/flake.lock." >&2
+              echo "Upstream may no longer pin the LiteLLM pricing snapshot through its flake." >&2
+              echo "Check how this tag obtains the snapshot and update the recipe to match." >&2
+              exit 1
+            fi
+            if [ "${upstream_rev}" != "${{ litellm_rev }}" ]; then
+              echo "ERROR: the vendored LiteLLM pricing snapshot is stale." >&2
+              echo "  litellm_rev in recipe.yaml: ${{ litellm_rev }}" >&2
+              echo "  nodes.litellm.locked.rev:   ${upstream_rev}" >&2
+              echo "Set litellm_rev to ${upstream_rev} and refresh the pricing source sha256 with:" >&2
+              echo "  curl -sL https://raw.githubusercontent.com/BerriAI/litellm/${upstream_rev}/model_prices_and_context_window.json | sha256sum" >&2
+              exit 1
+            fi
+        else:
+          # findstr cannot report the new revision, so point at flake.lock instead.
+          - 'findstr /c:${{ litellm_rev }} "%SRC_DIR%\flake.lock" >nul || (echo ERROR: litellm_rev is no longer the revision upstream pins in flake.lock, so the vendored LiteLLM pricing snapshot is stale. Set litellm_rev to nodes.litellm.locked.rev from flake.lock and refresh the pricing source sha256. & exit /b 1)'
       # rustc hands the link over to the bundled rust-lld of the x86_64 build
       # host, which does not understand ppc64le relocations. Use the cross
       # toolchain's own linker instead.
@@ -35,10 +59,8 @@ build:
           - export CARGO_BUILD_RUSTFLAGS="${CARGO_BUILD_RUSTFLAGS:-} -C link-self-contained=no -C link-arg=-fuse-ld=bfd"
       - if: unix
         then:
-          - python "$RECIPE_DIR/check_litellm_pin.py" ${{ litellm_rev }}
           - cargo auditable install --locked --no-track --bins --root ${{ PREFIX }} --path rust/crates/ccusage
         else:
-          - python "%RECIPE_DIR%\check_litellm_pin.py" ${{ litellm_rev }} || exit /b 1
           - cargo auditable install --locked --no-track --bins --root %LIBRARY_PREFIX% --path rust/crates/ccusage
       - cd rust
       - cargo-bundle-licenses --format yaml --output ../THIRDPARTY.yml
@@ -50,8 +72,6 @@ requirements:
     - ${{ compiler('rust') }}
     - cargo-auditable
     - cargo-bundle-licenses
-    # for check_litellm_pin.py
-    - python
 
 tests:
   - script:
