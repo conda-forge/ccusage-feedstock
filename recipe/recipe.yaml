@@ -26,6 +26,12 @@ build:
     env:
       CCUSAGE_PRICING_JSON_PATH: ${{ "$SRC_DIR/model_prices_and_context_window.json" if unix else "%SRC_DIR%\\model_prices_and_context_window.json" }}
     content:
+      # rustc hands the link over to the bundled rust-lld of the x86_64 build
+      # host, which does not understand ppc64le relocations. Use the cross
+      # toolchain's own linker instead.
+      - if: target_platform == "linux-ppc64le"
+        then:
+          - export CARGO_BUILD_RUSTFLAGS="${CARGO_BUILD_RUSTFLAGS:-} -C link-self-contained=no -C link-arg=-fuse-ld=bfd"
       - if: unix
         then:
           - cargo auditable install --locked --no-track --bins --root ${{ PREFIX }} --path rust/crates/ccusage
