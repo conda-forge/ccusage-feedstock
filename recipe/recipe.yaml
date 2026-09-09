@@ -15,7 +15,8 @@ source:
   # The build embeds a LiteLLM pricing snapshot. Vendoring it as a source and
   # pointing CCUSAGE_PRICING_JSON_PATH at it keeps the build offline and avoids
   # the `fetch-litellm-pricing` feature, whose minreq/rustls/aws-lc-sys
-  # build-dependency does not cross-compile.
+  # build-dependency does not cross-compile. check_litellm_pin.py fails the
+  # build if a version bump leaves litellm_rev behind upstream's flake.lock.
   - url: https://raw.githubusercontent.com/BerriAI/litellm/${{ litellm_rev }}/model_prices_and_context_window.json
     sha256: a74538d2edc13e1eb4f67870fbc2ee05035326e6eaed0dc5bce11d372cff6e60
     file_name: model_prices_and_context_window.json
@@ -34,8 +35,10 @@ build:
           - export CARGO_BUILD_RUSTFLAGS="${CARGO_BUILD_RUSTFLAGS:-} -C link-self-contained=no -C link-arg=-fuse-ld=bfd"
       - if: unix
         then:
+          - python "$RECIPE_DIR/check_litellm_pin.py" ${{ litellm_rev }}
           - cargo auditable install --locked --no-track --bins --root ${{ PREFIX }} --path rust/crates/ccusage
         else:
+          - python "%RECIPE_DIR%\check_litellm_pin.py" ${{ litellm_rev }} || exit /b 1
           - cargo auditable install --locked --no-track --bins --root %LIBRARY_PREFIX% --path rust/crates/ccusage
       - cd rust
       - cargo-bundle-licenses --format yaml --output ../THIRDPARTY.yml
@@ -47,6 +50,8 @@ requirements:
     - ${{ compiler('rust') }}
     - cargo-auditable
     - cargo-bundle-licenses
+    # for check_litellm_pin.py
+    - python
 
 tests:
   - script:
