@@ -1,9 +1,9 @@
 schema_version: 1
 
 context:
-  version: "20.0.28"
+  version: "20.0.31"
   # nodes.litellm.locked.rev from the upstream flake.lock of this tag
-  litellm_rev: 5b8f0a480348774b5217963eba456d2a192884ca
+  litellm_rev: d9123f459561754f41fd598a73b405b091d3bf84
 
 package:
   name: ccusage
@@ -11,14 +11,14 @@ package:
 
 source:
   - url: https://github.com/ccusage/ccusage/archive/refs/tags/v${{ version }}.tar.gz
-    sha256: c3f388f9e93c84a21c13204dff0727a9d18fba3ad9c06a703764181611732cc3
+    sha256: a7287b314988940a77b5f7f23774139ad68c2a944b3b498f5ad4b244348a72e9
   # The build embeds a LiteLLM pricing snapshot. Vendoring it as a source and
   # pointing CCUSAGE_PRICING_JSON_PATH at it keeps the build offline and avoids
   # the `fetch-litellm-pricing` feature, whose minreq/rustls/aws-lc-sys
   # build-dependency does not cross-compile. The build script fails if a version
   # bump leaves litellm_rev behind the rev upstream pins in flake.lock.
   - url: https://raw.githubusercontent.com/BerriAI/litellm/${{ litellm_rev }}/model_prices_and_context_window.json
-    sha256: 9a38df6ad30a08b2f58fecb0c3ca9097087f8c73b2ce489d87c73c923447afb1
+    sha256: 6b5e1ee7e77f02c7afd4a130099d48174aabb157389de3a7512c5e1d1063e403
     file_name: model_prices_and_context_window.json
 
 build:
