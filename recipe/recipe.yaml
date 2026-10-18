@@ -1,7 +1,7 @@
 schema_version: 1
 
 context:
-  version: "20.0.32"
+  version: "20.0.36"
   # nodes.litellm.locked.rev from the upstream flake.lock of this tag
   litellm_rev: 2f3ccbe7c77df16c5afdf38031d23c32a53a4c09
 
@@ -11,7 +11,7 @@ package:
 
 source:
   - url: https://github.com/ccusage/ccusage/archive/refs/tags/v${{ version }}.tar.gz
-    sha256: 0c96e9c79b28554d5ba46a2a5e1332be0e2483e56ed2c11164e03b7082669c7e
+    sha256: fbf05898640a745f257078f2b067a6a1da0fd0c872599ef6c921b4e89b0a8198
   # The build embeds a LiteLLM pricing snapshot. Vendoring it as a source and
   # pointing CCUSAGE_PRICING_JSON_PATH at it keeps the build offline and avoids
   # the `fetch-litellm-pricing` feature, whose minreq/rustls/aws-lc-sys
