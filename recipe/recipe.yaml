@@ -3,7 +3,7 @@ schema_version: 1
 context:
   version: "20.0.36"
   # nodes.litellm.locked.rev from the upstream flake.lock of this tag
-  litellm_rev: 2f3ccbe7c77df16c5afdf38031d23c32a53a4c09
+  litellm_rev: eb114e638d4557a9155d5eb21fd9cb332336c85f
 
 package:
   name: ccusage
@@ -18,7 +18,7 @@ source:
   # build-dependency does not cross-compile. The build script fails if a version
   # bump leaves litellm_rev behind the rev upstream pins in flake.lock.
   - url: https://raw.githubusercontent.com/BerriAI/litellm/${{ litellm_rev }}/model_prices_and_context_window.json
-    sha256: 2f28121f02c9b891078b14eee0d8a0a185c744583a6c5e1f389cc8d39090080d
+    sha256: da798353b3d14c09a13f2f1fe42eaf903212c158bb6d94d724836225c68d865d
     file_name: model_prices_and_context_window.json
 
 build:
